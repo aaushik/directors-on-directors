@@ -93,3 +93,15 @@ single-director Qs, large k for compare); (b) a cross-encoder reranker over a
 larger fetch_k; (c) a stronger eval judge so precision scores are trustworthy.
 
 All steps run LOCALLY (write the local `chroma_db/`). Idempotent/resumable.
+
+## FUTURE DIRECTION (raised 2026-06-11, not yet decided): portfolio front-end
+Turn this into a portfolio piece — a question front-end that returns answers.
+`RAG.answer()` already returns answer text + structured `sources` (timestamped
+YouTube URLs), so the UI is mostly a wrapper; per-question cost is just 1 query
+embed + 1 LLM call. Two open decisions:
+- Stack: Streamlit (fastest, pure Python, free deploy) vs FastAPI + web UI
+  (more eng signal) vs integrate into the existing Astro/Vercel personal site
+  (needs the Python RAG hosted as a separate API).
+- Hosting/demo: live with own key + rate-limit/cache (clickable; free-tier
+  quota risk if viral) vs local + recorded GIF (zero risk, not interactive) vs
+  visitors-bring-own-key. Clarify audience + learn-vs-ship before picking.
