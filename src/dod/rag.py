@@ -83,7 +83,7 @@ def _format_context(docs: list[Document]) -> tuple[str, list[Source]]:
 
 
 class RAG:
-    def __init__(self, k: int = 12, fetch_k: int = 40):
+    def __init__(self, k: int = 12, fetch_k: int = 40, lambda_mult: float = 0.5):
         load_dotenv(ROOT / ".env")
         self.embedder = GoogleGenerativeAIEmbeddings(model=EMBED_MODEL)
         self.store = Chroma(
@@ -94,9 +94,10 @@ class RAG:
         # MMR diversifies across videos/directors instead of returning
         # near-duplicate chunks from whichever one video matches hardest —
         # important for "which directors are similar in X" comparisons.
+        # lambda_mult: 1.0 = pure relevance, 0.0 = pure diversity.
         self.retriever = self.store.as_retriever(
             search_type="mmr",
-            search_kwargs={"k": k, "fetch_k": fetch_k, "lambda_mult": 0.5},
+            search_kwargs={"k": k, "fetch_k": fetch_k, "lambda_mult": lambda_mult},
         )
         self.llm = ChatGoogleGenerativeAI(model=CHAT_MODEL, temperature=0.3)
 

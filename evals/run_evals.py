@@ -59,6 +59,10 @@ from dod.rag import RAG  # noqa: E402
 EVAL_SET = ROOT / "evals" / "eval_set.jsonl"
 RESULTS_DIR = ROOT / "evals" / "results"
 JUDGE_MODEL = os.getenv("DOD_JUDGE_MODEL", "gemini-3.1-flash-lite")
+# answer_relevancy needs candidate_count>1 (strictness), which 3.1-flash-lite
+# rejects. 2.5-flash-lite allows it and is a separate free-tier quota bucket.
+RELEVANCY_MODEL = os.getenv("DOD_RELEVANCY_MODEL", "gemini-2.5-flash-lite")
+RELEVANCY_STRICTNESS = int(os.getenv("DOD_RELEVANCY_STRICTNESS", "3"))
 EMBED_MODEL = "models/gemini-embedding-001"
 
 
@@ -103,14 +107,23 @@ def main() -> None:
     rows = load_eval_set(args.limit)
     print(f"Eval set: {len(rows)} questions | judge={JUDGE_MODEL}")
 
+    judge = LangchainLLMWrapper(ChatGoogleGenerativeAI(model=JUDGE_MODEL, temperature=0))
+    embeddings = LangchainEmbeddingsWrapper(GoogleGenerativeAIEmbeddings(model=EMBED_MODEL))
+
+    # answer_relevancy gets its own judge (supports candidate_count>1) + quota bucket.
+    relevancy_judge = LangchainLLMWrapper(
+        ChatGoogleGenerativeAI(model=RELEVANCY_MODEL, temperature=0))
+    relevancy = ResponseRelevancy(strictness=RELEVANCY_STRICTNESS)
+    relevancy.llm = relevancy_judge
+    relevancy.embeddings = embeddings
+    print(f"  answer_relevancy judge={RELEVANCY_MODEL} strictness={RELEVANCY_STRICTNESS}")
+
     metrics = [
         Faithfulness(),
-        ResponseRelevancy(),
+        relevancy,
         LLMContextPrecisionWithReference(),
         LLMContextRecall(),
     ]
-    judge = LangchainLLMWrapper(ChatGoogleGenerativeAI(model=JUDGE_MODEL, temperature=0))
-    embeddings = LangchainEmbeddingsWrapper(GoogleGenerativeAIEmbeddings(model=EMBED_MODEL))
 
     if args.dry:
         print("[dry] constructed RAG, judge, embeddings, metrics — no API calls made.")

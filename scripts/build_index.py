@@ -3,6 +3,7 @@
 Idempotent + resumable + throttled. Free tier is 100 embed req/min — we pace
 one request at a time with a small sleep and checkpoint to Chroma periodically.
 """
+import argparse
 import json
 import re
 import sys
@@ -95,6 +96,12 @@ def checkpoint(collection, docs, ids, embeddings) -> None:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--max", type=int, default=None,
+                    help="stop after embedding this many chunks (budget the daily "
+                         "embed quota so some is left for evals/tuning)")
+    args = ap.parse_args()
+
     load_dotenv(ROOT / ".env")
     embedder = GoogleGenerativeAIEmbeddings(model=EMBED_MODEL)
     store = Chroma(
@@ -108,7 +115,10 @@ def main() -> None:
     print(f"Built {len(docs)} candidate chunks")
     existing = set(collection.get(ids=ids)["ids"])
     pending = [(d, i) for d, i in zip(docs, ids) if i not in existing]
-    print(f"Already indexed: {len(existing)}. To embed: {len(pending)}")
+    print(f"Already indexed: {len(existing)}. Remaining: {len(pending)}")
+    if args.max is not None and len(pending) > args.max:
+        pending = pending[:args.max]
+        print(f"Budget cap: embedding {len(pending)} this run (--max {args.max})")
     if not pending:
         return
 
