@@ -24,11 +24,9 @@ A RAG chatbot over YouTube's "Directors on Directors" series (~30 videos), augme
      with timestamped citations. CLI: `scripts/ask.py`
 - ✅ Wikipedia fetched: all 49 directors (`scripts/fetch_wikipedia.py` →
      `data/wikipedia/`), prose-chunked via `chunk_article`
-- 🟡 Wikipedia indexing PARTIAL: **1131 of 1737 chunks embedded (33 of 49
-     directors**, alphabetical through Oliver Stone). 606 chunks / 16 directors
-     remain (Olivia Wilde → Zoë Kravitz, incl. Ridley Scott, Spike Lee, Sean
-     Baker, Pedro Almodóvar). `build_index.py` now takes `--max N` to budget the
-     daily embed cap; it is idempotent/resumable.
+- ✅ Wikipedia indexing COMPLETE (06-12): **1737/1737 chunks, all 49 directors**.
+     Full index = 3166 chunks (1429 transcript + 1737 wiki). `build_index.py`
+     takes `--max N` to budget the daily embed cap; idempotent/resumable.
 - ✅ RAGAS eval harness (`evals/run_evals.py` + `evals/eval_set.jsonl`, 14 Qs).
      answer_relevancy needs candidate_count>1 → routed to a separate
      `gemini-2.5-flash-lite` judge (`DOD_RELEVANCY_MODEL`); `flash-lite` rejects
@@ -38,11 +36,17 @@ A RAG chatbot over YouTube's "Directors on Directors" series (~30 videos), augme
      sweep (no answer generation).
 - ✅ First git commit done (06-11).
 
-## Findings (06-11) — what the 12→33-director re-index bought
-Overall (06-10 → 06-11): faithfulness 0.91→0.96, answer_relevancy 0.63→0.64,
-context_precision 0.24→0.27, context_recall 0.50→0.57. Bio recall 0.50→0.67
-(**1.00 for indexed-only directors** — excluding the not-yet-indexed Ridley
-Scott + Spike Lee). So Wikipedia augmentation works: recall + faithfulness up.
+## Findings — what the Wikipedia augmentation bought (12 → 33 → 49 dirs)
+Overall across the three index states (06-10 / 06-11 / 06-12-complete):
+faithfulness 0.91 → 0.96 → 0.98; answer_relevancy 0.63 → 0.64 → 0.81;
+context_precision 0.24 → 0.27 → 0.48; context_recall 0.50 → 0.57 → 0.75.
+Bio is the headline: precision 0.04 → 0.13 → 0.46 (~10×), recall 0.50 → 0.67 →
+1.00. The complete index delivered big gains everywhere it could.
+EXCEPTION: `compare` recall stuck at 0.33 across all three — breadth questions
+("which directors prefer X") where the reference names several directors but
+MMR k=12 surfaces only a fraction. NOT an indexing problem (see #2 below);
+needs query-adaptive k or a reranker. (n is tiny + flash-lite judge noisy →
+trust the trend, not absolutes.)
 
 Two things diagnosed for ~free (direct retrieval inspection, no judge):
 1. **The low context_precision is a JUDGE ARTIFACT, not a retrieval failure.**
@@ -71,26 +75,14 @@ sweep times out. Keep sweeps tiny, or use a paid/higher-limit judge.
   `gemini-3.1-flash-lite` rejects). Strictness via `DOD_RELEVANCY_STRICTNESS`.
 - Embeddings: `gemini-embedding-001` (1000/day).
 
-## RESUME (plan as of 2026-06-11 EOD): FINISH INDEXING, then final eval
-606 wiki chunks (16 directors) remain. The only genuine eval zeros left are
-not-yet-indexed directors (Ridley Scott, Spike Lee, + the Anora/Sean Baker
-"mixed" Q) — finishing the index is the one real lever left.
-
-Tomorrow (after the ~midnight-PT daily reset), in order:
-
-    cd ~/projects/directors-on-directors
-    .venv/bin/python scripts/build_index.py         # 1) finish — 606 < 1000/day cap, fits in one run
-    .venv/bin/python evals/run_evals.py             # 2) final 14-Q eval on the COMPLETE index
-
-Quota (per-model daily buckets, reset together): build = ~606 embeds (under the
-1000/day cap, so no --max needed). Eval = ~75 embeds + ~210 `gemini-3.1-flash-lite`
-calls (500/day) — context_precision alone is ~k calls/question. Comfortable
-together. Compare the new `evals/results/*.json` against the 06-11 post-index run.
-
-Then (NOT a config tweak — see Findings): the precision ceiling is architectural.
-Future work options, in order of effort: (a) query-adaptive k (small k for
-single-director Qs, large k for compare); (b) a cross-encoder reranker over a
-larger fetch_k; (c) a stronger eval judge so precision scores are trustworthy.
+## RESUME (as of 2026-06-12): index + eval arc DONE. Next: portfolio front-end.
+Indexing complete (49/49 dirs), final eval run (`results/20260612T140512Z.json`).
+The RAG + evals milestone is finished. Next direction is the portfolio front-end
+(see below). Optional later retrieval work (NOT a config tweak — see Findings),
+in order of effort: (a) query-adaptive k (small k for single-director Qs, large
+k for compare — would lift the stuck compare recall); (b) a cross-encoder
+reranker over a larger fetch_k; (c) a stronger eval judge so precision scores
+are trustworthy.
 
 All steps run LOCALLY (write the local `chroma_db/`). Idempotent/resumable.
 
